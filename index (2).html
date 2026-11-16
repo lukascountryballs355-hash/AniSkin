@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Animador de Pose Minecraft</title>
+<style>
+:root{--bg:#f2f2f4;--card:#fff;--tx:#222;--mu:#777;--ac:#2f7bff;--bd:#dcdce2;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15161a;--card:#202228;--tx:#eee;--mu:#9a9ca6;--bd:#33353d}}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+h1{font-size:18px;margin:0;padding:12px 16px}
+.app{display:grid;grid-template-columns:1fr 360px;gap:12px;padding:0 12px 12px;max-width:1200px;margin:auto}
+@media(max-width:820px){.app{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px}
+.stage{position:relative;height:62vh;min-height:340px;padding:0;overflow:hidden}
+canvas{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+.ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--card) 90%,transparent);text-align:center}
+.ov>div{max-width:300px}
+button,select{font:inherit;color:var(--tx);background:var(--card);border:1px solid var(--bd);border-radius:7px;padding:6px 10px;cursor:pointer}
+button.p{background:var(--ac);color:#fff;border-color:var(--ac)}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0}
+.sl{display:grid;grid-template-columns:78px repeat(3,1fr);gap:6px;align-items:center;margin:3px 0;font-size:12px}
+.sl input{width:100%;min-width:0}
+.sl span{color:var(--mu)}
+.fr{min-width:34px;padding:6px 8px}.fr.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+h2{font-size:13px;margin:4px 0;color:var(--mu);font-weight:600}
+.panel{max-height:calc(100vh - 70px);overflow:auto}
+label{font-size:12px;color:var(--mu)}
+</style></head><body>
+<h1 style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>🎬 Animador de Pose Minecraft</span><select id="lang" data-skip><option value="pt">Português</option><option value="en">English</option><option value="es">Español</option></select></h1>
+<div class="app">
+ <div>
+  <div class="card stage" id="stage"><canvas id="cv"></canvas>
+   <div class="ov" id="ov"><div>
+    <h2 style="font-size:16px;color:var(--tx)">Coloque sua skin</h2>
+    <p style="color:var(--mu)">Envie o PNG da skin (64×64 ou 64×32).</p>
+    <input type="file" id="file" accept="image/png,image/*"><br><br>
+    <label><input type="checkbox" id="slim1"> Braço fino (Alex/slim)</label><br><br>
+    <button id="def">Usar skin padrão</button>
+   </div></div>
+  </div>
+  <div class="card" style="margin-top:10px">
+   <div class="row">
+    <button class="p" id="play" data-skip>▶ Reproduzir</button>
+    <button id="rec" data-skip>⏺ Gravar WebM</button>
+    <button id="png">📷 PNG</button>
+    <button id="chg">Trocar skin</button>
+    <label><input type="checkbox" id="slim2"> slim</label>
+   </div>
+   <div class="row">
+    <label>Tempo por frame <input type="range" id="seg" min="0.2" max="3" step="0.1" value="0.8"> <b id="segv">0.8s</b></label>
+    <select id="loop"><option value="ping">Ida e volta</option><option value="cycle">Ciclo suave</option><option value="restart">Reiniciar</option><option value="once">Parar no fim</option></select>
+    <label><input type="checkbox" id="smooth" checked> suavizar (desligado = 10 fps)</label>
+    <label><input type="checkbox" id="idle" checked> idle (respiração)</label>
+    <label>cabelo <input type="range" id="hair" min="0" max="2" step="0.1" value="1"></label>
+   </div>
+   <h2>Frames (clique para editar)</h2>
+   <div class="row" id="frames"></div>
+   <div class="row">
+    <button id="add">+ Novo frame</button><button id="del">Excluir</button>
+    <select id="pre"><option value="">Predefinições…</option><option value="walk">Andar</option><option value="wave">Acenar</option><option value="spin">Girar</option></select>
+   </div>
+  </div>
+ </div>
+ <div class="card panel"><h2>Pose do frame (graus)</h2><div id="sliders" data-skip></div><div class="row"><button id="rst">Zerar pose</button></div>
+  <h2>Poses prontas (aplica no frame)</h2><div class="row" id="poses" data-skip></div>
+  <p style="color:var(--mu);font-size:12px">Arraste no modelo para girar a câmera, role para dar zoom. Mudar os sliders edita o frame selecionado.</p></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const D={
+en:{'🎬 Animador de Pose Minecraft':'🎬 Minecraft Pose Animator','Animador de Pose Minecraft':'Minecraft Pose Animator','Coloque sua skin':'Add your skin','Envie o PNG da skin (64×64 ou 64×32).':'Upload your skin PNG (64×64 or 64×32).','Braço fino (Alex/slim)':'Slim arms (Alex)','Usar skin padrão':'Use default skin','Trocar skin':'Change skin','Tempo por frame':'Time per frame','Ida e volta':'Ping-pong','Ciclo suave':'Smooth cycle','Reiniciar':'Restart','Parar no fim':'Stop at end','suavizar (desligado = 10 fps)':'smooth (off = 10 fps)','idle (respiração)':'idle (breathing)','cabelo':'hair','Frames (clique para editar)':'Frames (click to edit)','+ Novo frame':'+ New frame','Excluir':'Delete','Predefinições…':'Presets…','Andar':'Walk','Acenar':'Wave','Girar':'Spin','Pose do frame (graus)':'Frame pose (degrees)','Zerar pose':'Reset pose','Poses prontas (aplica no frame)':'Ready poses (applies to frame)','Arraste no modelo para girar a câmera, role para dar zoom. Mudar os sliders edita o frame selecionado.':'Drag on the model to rotate the camera, scroll to zoom. Moving the sliders edits the selected frame.','▶ Reproduzir':'▶ Play','⏸ Pausar':'⏸ Pause','⏺ Gravar WebM':'⏺ Record WebM','⏹ Gravando… (parar)':'⏹ Recording… (stop)','Gravação indisponível neste navegador.':'Recording is not available in this browser.','Modelo':'Model','Posição px':'Position px','Cabeça':'Head','Corpo':'Body','Braço esq.':'Left arm','Braço dir.':'Right arm','Perna esq.':'Left leg','Perna dir.':'Right leg','Em pé':'Standing','Sentar no chão':'Sit on floor','Sentar pernas abertas':'Sit legs apart','Deitar':'Lie down','Correr':'Run','Pular':'Jump','Comemorar':'Celebrate','Apontar':'Point','Olhar para cima':'Look up'},
+es:{'🎬 Animador de Pose Minecraft':'🎬 Animador de Poses de Minecraft','Animador de Pose Minecraft':'Animador de Poses de Minecraft','Coloque sua skin':'Pon tu skin','Envie o PNG da skin (64×64 ou 64×32).':'Sube el PNG de tu skin (64×64 o 64×32).','Braço fino (Alex/slim)':'Brazo fino (Alex/slim)','Usar skin padrão':'Usar skin por defecto','Trocar skin':'Cambiar skin','Tempo por frame':'Tiempo por fotograma','Ida e volta':'Ida y vuelta','Ciclo suave':'Ciclo suave','Reiniciar':'Reiniciar','Parar no fim':'Parar al final','suavizar (desligado = 10 fps)':'suavizar (apagado = 10 fps)','idle (respiração)':'idle (respiración)','cabelo':'pelo','Frames (clique para editar)':'Fotogramas (clic para editar)','+ Novo frame':'+ Nuevo fotograma','Excluir':'Eliminar','Predefinições…':'Predefinidos…','Andar':'Caminar','Acenar':'Saludar','Girar':'Girar','Pose do frame (graus)':'Pose del fotograma (grados)','Zerar pose':'Reiniciar pose','Poses prontas (aplica no frame)':'Poses listas (se aplican al fotograma)','Arraste no modelo para girar a câmera, role para dar zoom. Mudar os sliders edita o frame selecionado.':'Arrastra sobre el modelo para girar la cámara y usa la rueda para el zoom. Mover los controles edita el fotograma seleccionado.','▶ Reproduzir':'▶ Reproducir','⏸ Pausar':'⏸ Pausar','⏺ Gravar WebM':'⏺ Grabar WebM','⏹ Gravando… (parar)':'⏹ Grabando… (parar)','Gravação indisponível neste navegador.':'La grabación no está disponible en este navegador.','Modelo':'Modelo','Posição px':'Posición px','Cabeça':'Cabeza','Corpo':'Cuerpo','Braço esq.':'Brazo izq.','Braço dir.':'Brazo der.','Perna esq.':'Pierna izq.','Perna dir.':'Pierna der.','Em pé':'De pie','Sentar no chão':'Sentar en el suelo','Sentar pernas abertas':'Sentar piernas abiertas','Deitar':'Acostar','Correr':'Correr','Pular':'Saltar','Comemorar':'Celebrar','Apontar':'Señalar','Olhar para cima':'Mirar arriba'}};
+let L='pt';const T=x=>(L!='pt'&&D[L]&&D[L][x])||x;
+function setLang(l){L=l;$('lang').value=l;document.documentElement.lang=l=='pt'?'pt-BR':l;document.title=T('Animador de Pose Minecraft');
+ const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;
+ while(n=w.nextNode()){if(n.parentElement.closest('[data-skip],script'))continue;if(n._o===undefined)n._o=n.nodeValue;const m=n._o.trim();if(m)n.nodeValue=n._o.replace(m,()=>T(m))}
+ $('play').textContent=playing?T('⏸ Pausar'):T('▶ Reproduzir');$('rec').textContent=rec?T('⏹ Gravando… (parar)'):T('⏺ Gravar WebM');
+ sliders();buildPoses();try{localStorage.setItem('lang',l)}catch(e){}}
+let INIT=(()=>{let v=null;try{v=localStorage.getItem('lang')}catch(e){}v=v||(navigator.language||'en').slice(0,2);return['pt','en','es'].includes(v)?v:'en'})();
+$('lang').onchange=e=>setLang(e.target.value);
+
+const P=[['m','Modelo'],['o','Posição px'],['h','Cabeça'],['b','Corpo'],['la','Braço esq.'],['ra','Braço dir.'],['ll','Perna esq.'],['rl','Perna dir.']];
+const zero=()=>Object.fromEntries(P.map(([k])=>[k,[0,0,0]]));
+const mk=o=>Object.assign(zero(),JSON.parse(JSON.stringify(o)));
+let frames=[zero()],sel=0,cur=mk(frames[0]),playing=false,t=0,skinCanvas=null,slim=false,ref={};
+// three
+const cv=$('cv'),R=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true,preserveDrawingBuffer:true});
+const S=new THREE.Scene(),C=new THREE.PerspectiveCamera(40,1,1,500);
+S.add(new THREE.AmbientLight(0xffffff,.75));const dl=new THREE.DirectionalLight(0xffffff,.55);dl.position.set(30,50,60);S.add(dl);
+let th=.5,ph=1.35,dist=75;
+function cam(){C.position.set(dist*Math.sin(ph)*Math.sin(th),12+dist*Math.cos(ph),dist*Math.sin(ph)*Math.cos(th));C.lookAt(0,12,0)}
+function size(){const s=$('stage');R.setSize(s.clientWidth,s.clientHeight,false);C.aspect=s.clientWidth/s.clientHeight;C.updateProjectionMatrix()}
+addEventListener('resize',size);
+let dr=null;cv.onpointerdown=e=>{dr=[e.clientX,e.clientY];cv.setPointerCapture(e.pointerId)};
+cv.onpointerup=()=>dr=null;
+cv.onpointermove=e=>{if(!dr)return;th-=(e.clientX-dr[0])*.01;ph=Math.min(3,Math.max(.2,ph-(e.clientY-dr[1])*.01));dr=[e.clientX,e.clientY]};
+cv.onwheel=e=>{e.preventDefault();dist=Math.min(200,Math.max(25,dist*(1+e.deltaY*.001)))};
+// skin
+function box(w,h,d,u,v,pad,mat){
+ const g=new THREE.BoxGeometry(w+pad,h+pad,d+pad),uv=g.attributes.uv;
+ const rg=[[u+d+w,v+d,d,h],[u,v+d,d,h],[u+d,v,w,d],[u+d+w,v,w,d],[u+d,v+d,w,h],[u+2*d+w,v+d,w,h]];
+ rg.forEach(([x,y,a,b],i)=>{const u0=x/64,u1=(x+a)/64,v0=1-y/64,v1=1-(y+b)/64;
+  uv.setXY(i*4,u0,v0);uv.setXY(i*4+1,u1,v0);uv.setXY(i*4+2,u0,v1);uv.setXY(i*4+3,u1,v1)});
+ return new THREE.Mesh(g,mat)}
+function part(w,h,d,u,v,u2,v2,off,m1,m2){const g=new THREE.Group(),a=box(w,h,d,u,v,0,m1),b=box(w,h,d,u2,v2,.6,m2);
+ a.position.copy(off);b.position.copy(off);g.add(a,b);return g}
+function build(){
+ if(ref.root)S.remove(ref.root);
+ const tex=new THREE.CanvasTexture(skinCanvas);tex.magFilter=tex.minFilter=THREE.NearestFilter;
+ const m1=new THREE.MeshLambertMaterial({map:tex,transparent:true,alphaTest:.5}),m2=new THREE.MeshLambertMaterial({map:tex,transparent:true,alphaTest:.5,side:THREE.DoubleSide});
+ const aw=slim?3:4,V=(x,y,z)=>new THREE.Vector3(x,y,z);
+ const root=new THREE.Group(),m=new THREE.Group(),b=new THREE.Group(),h=new THREE.Group(),la=new THREE.Group(),ra=new THREE.Group(),ll=new THREE.Group(),rl=new THREE.Group();
+ m.position.y=12;root.add(m);m.add(b,ll,rl);
+ const bp=part(8,12,4,16,16,16,32,V(0,6,0),m1,m2);b.add(bp);
+ const hp=part(8,8,8,0,0,32,0,V(0,4,0),m1,m2);h.position.y=12;h.add(hp);b.add(h);
+ la.position.set(4+aw/2,10,0);la.add(part(aw,12,4,32,48,48,48,V(0,-4,0),m1,m2));
+ ra.position.set(-4-aw/2,10,0);ra.add(part(aw,12,4,40,16,40,32,V(0,-4,0),m1,m2));
+ b.add(la,ra);
+ ll.position.set(2,0,0);ll.add(part(4,12,4,16,48,0,48,V(0,-6,0),m1,m2));
+ rl.position.set(-2,0,0);rl.add(part(4,12,4,0,16,0,32,V(0,-6,0),m1,m2));
+ S.add(root);ref={root,m,h,b,la,ra,ll,rl,hair:[[hp.children[1],.7],[bp.children[1],1.1]],sv:0};
+ for(const[me]of ref.hair){const a=me.geometry.attributes.position.array;me.userData.o=a.slice();let mx=-1e9,mn=1e9;for(let i=1;i<a.length;i+=3){mx=Math.max(mx,a[i]);mn=Math.min(mn,a[i])}me.userData.mx=mx;me.userData.mn=mn}
+ apply(cur)}
+function apply(p){const r=Math.PI/180;for(const[k]of P){if(k=='o'){ref.root.position.set(p.o[0],p.o[1],p.o[2]);continue}ref[k].rotation.set(p[k][0]*r,p[k][1]*r,p[k][2]*r)}}
+function setSkin(img){const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d');x.imageSmoothingEnabled=false;
+ x.drawImage(img,0,0);if(img.height<=32){x.drawImage(c,0,16,16,16,16,48,16,16);x.drawImage(c,40,16,16,16,32,48,16,16)}
+ skinCanvas=c;slim=$('slim1').checked||$('slim2').checked;$('slim2').checked=slim;build();$('ov').style.display='none'}
+function defSkin(){const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d');
+ const f=(col,...r)=>{x.fillStyle=col;x.fillRect(...r)};
+ f('#c99a7a',0,0,32,16);f('#3a2a20',0,0,32,8);f('#3a2a20',8,8,8,2);f('#fff',10,12,2,1);f('#fff',14,12,2,1);f('#35e',11,12,1,1);f('#35e',14,12,1,1);
+ f('#2d9cdb',16,16,24,16);f('#2d9cdb',40,16,16,16);f('#2d9cdb',32,48,16,16);f('#3b3b8f',0,16,16,16);f('#3b3b8f',16,48,16,16);
+ skinCanvas=c;slim=$('slim1').checked;build();$('ov').style.display='none'}
+$('file').onchange=e=>{const f=e.target.files[0];if(!f)return;const i=new Image();i.onload=()=>setSkin(i);i.src=URL.createObjectURL(f)};
+$('def').onclick=defSkin;$('chg').onclick=()=>{$('ov').style.display='flex'};
+$('slim2').onchange=e=>{if(!skinCanvas)return;slim=e.target.checked;build()};
+// UI
+function sliders(){const el=$('sliders');el.innerHTML='';
+ for(const[k,n]of P){const r=document.createElement('div');r.className='sl';r.innerHTML='<b>'+T(n)+'</b>';
+  for(let i=0;i<3;i++){const w=document.createElement('div');w.innerHTML='<input type="range" min="-180" max="180" step="1"><span></span>';
+   const inp=w.firstChild,sp=w.lastChild;if(k=='o'){inp.min=-30;inp.max=30}inp.value=cur[k][i];sp.textContent='XYZ'[i]+' '+cur[k][i];inp.dataset.k=k;inp.dataset.i=i;
+   inp.oninput=()=>{pause();cur[k][i]=+inp.value;sp.textContent='XYZ'[i]+' '+inp.value;apply(cur);if(frames[sel])frames[sel]=mk(cur)};r.appendChild(w)}
+  el.appendChild(r)}}
+function flist(){const el=$('frames');el.innerHTML='';frames.forEach((f,i)=>{const b=document.createElement('button');b.className='fr'+(i==sel?' on':'');b.textContent=i+1;
+ b.onclick=()=>{pause();sel=i;cur=mk(frames[i]);apply(cur);sliders();flist()};el.appendChild(b)})}
+function pause(){playing=false;$('play').textContent=T('▶ Reproduzir')}
+$('play').onclick=()=>{if(playing){pause();cur=mk(frames[sel]);apply(cur);sliders()}else{if($('loop').value=='once')t=0;playing=true;$('play').textContent=T('⏸ Pausar')}};
+$('add').onclick=()=>{pause();frames.splice(sel+1,0,mk(cur));sel++;flist()};
+$('del').onclick=()=>{if(frames.length<2)return;pause();frames.splice(sel,1);sel=Math.min(sel,frames.length-1);cur=mk(frames[sel]);apply(cur);sliders();flist()};
+$('rst').onclick=()=>{pause();cur=zero();frames[sel]=mk(cur);apply(cur);sliders()};
+$('seg').oninput=e=>$('segv').textContent=e.target.value+'s';
+const PRE={walk:[{la:[40,0,0],ra:[-40,0,0],ll:[-35,0,0],rl:[35,0,0],b:[0,8,0]},{la:[-40,0,0],ra:[40,0,0],ll:[35,0,0],rl:[-35,0,0],b:[0,-8,0]}],
+ wave:[{ra:[0,0,-150],h:[0,15,0]},{ra:[0,0,-175],h:[0,-15,0]}],
+ spin:[{m:[0,0,0]},{m:[0,120,0]},{m:[0,240,0]},{m:[0,360,0]}]};
+$('pre').onchange=e=>{const v=e.target.value;if(!v)return;pause();frames=PRE[v].map(mk);sel=0;cur=mk(frames[0]);$('loop').value=v=='spin'?'restart':'ping';apply(cur);sliders();flist();e.target.value=''};
+const POSES={'Em pé':{},
+ 'Sentar no chão':{o:[0,-12,0],ll:[-90,0,0],rl:[-90,0,0],la:[-25,0,5],ra:[-25,0,-5],b:[-4,0,0]},
+ 'Sentar pernas abertas':{o:[0,-12,0],ll:[-90,0,14],rl:[-90,0,-14],la:[-20,0,15],ra:[-20,0,-15],b:[-4,0,0]},
+ 'Deitar':{o:[0,-10,0],m:[-90,0,0],la:[0,0,8],ra:[0,0,-8]},
+ 'Acenar':{ra:[0,0,-150],h:[0,15,8],la:[0,0,4]},
+ 'T-pose':{la:[0,0,90],ra:[0,0,-90]},
+ 'Correr':{b:[15,0,0],la:[-60,0,0],ra:[50,0,0],ll:[50,0,0],rl:[-60,0,0]},
+ 'Pular':{o:[0,6,0],la:[0,0,40],ra:[0,0,-40],ll:[-20,0,6],rl:[-10,0,-6]},
+ 'Comemorar':{la:[0,0,160],ra:[0,0,-160],h:[-15,0,0]},
+ 'Apontar':{ra:[-90,0,0],h:[0,-10,0],b:[0,-10,0]},
+ 'Olhar para cima':{h:[-30,0,0],la:[0,0,6],ra:[0,0,-6]}};
+function buildPoses(){$('poses').innerHTML='';for(const n in POSES){const b=document.createElement('button');b.textContent=T(n);b.onclick=()=>{pause();cur=mk(POSES[n]);frames[sel]=mk(cur);apply(cur);sliders()};$('poses').appendChild(b)}}buildPoses();
+// playback
+function loopLen(){const n=frames.length,s=+$('seg').value,m=$('loop').value;return Math.max(s,(m=='ping'?2*(n-1):m=='cycle'?n:n-1)*s)}
+function sample(t){const n=frames.length;if(n<2)return frames[0];const s=+$('seg').value,m=$('loop').value;let p=t/s;
+ if(m=='ping'){const L=2*(n-1);p%=L;if(p>n-1)p=L-p}else if(m=='cycle')p%=n;else if(m=='once')p=Math.min(p,n-1);else p%=(n-1);
+ const i=Math.floor(p);let f=p-i;if($('smooth').checked)f=f*f*(3-2*f);const a=frames[i],b=frames[(i+1)%n],o={};
+ for(const[k]of P)o[k]=a[k].map((v,j)=>v+(b[k][j]-v)*f);return o}
+function fx(ts,dt){
+ const s=Math.sin(ts*1.8);
+ if($('idle').checked){ref.b.position.y=s*.12;ref.b.rotation.x+=s*.014;ref.h.rotation.x+=Math.sin(ts*1.8-.7)*.025;ref.h.rotation.y+=Math.sin(ts*.6)*.06;
+  ref.la.rotation.z+=.04+s*.03;ref.ra.rotation.z-=.04+s*.03;ref.la.rotation.x+=Math.sin(ts*1.8+.5)*.02;ref.ra.rotation.x-=Math.sin(ts*1.8+.5)*.02;ref.m.rotation.z+=Math.sin(ts*.9)*.012}
+ else ref.b.position.y=0;
+ const ang=ref.m.rotation.y+ref.b.rotation.y+ref.h.rotation.y,v=(ang-(ref.pa===undefined?ang:ref.pa))/Math.max(dt,.001);ref.pa=ang;
+ ref.sv=ref.sv*.9+Math.max(-6,Math.min(6,v))*.1;
+ const k=+$('hair').value;
+ for(const[me,amp]of ref.hair){const g=me.geometry.attributes.position,o=me.userData.o,mx=me.userData.mx,mn=me.userData.mn;
+  for(let i=0;i<g.count;i++){const d=(mx-o[i*3+1])/(mx-mn);
+   const x=Math.sin(ts*2+d*1.3)*amp*k*d-ref.sv*.35*k*d*amp;
+   const z=Math.cos(ts*1.5+d*1.1)*amp*.6*k*d;
+   g.array[i*3]=o[i*3]+x;g.array[i*3+2]=o[i*3+2]+z}
+  g.needsUpdate=true}}
+let last=performance.now(),recT=0,rec=null;
+function loop(now){requestAnimationFrame(loop);const dt=(now-last)/1000;last=now;
+ if(playing&&skinCanvas){t+=dt;cur=sample($('smooth').checked?t:Math.floor(t*10)/10);if($('loop').value=='once'&&t>=(frames.length-1)*+$('seg').value){cur=mk(frames[frames.length-1]);pause();if(rec)rec.stop()}apply(cur);if(rec&&(recT+=dt)>=loopLen()){rec.stop()}}
+ if(skinCanvas&&ref.m){apply(cur);fx($('smooth').checked?now/1000:Math.floor(now/100)/10,dt)}cam();R.render(S,C)}
+$('png').onclick=()=>{R.render(S,C);const a=document.createElement('a');a.href=cv.toDataURL('image/png');a.download='pose.png';a.click()};
+$('rec').onclick=()=>{if(rec){rec.stop();return}
+ if(!skinCanvas||typeof MediaRecorder=='undefined'){alert(T('Gravação indisponível neste navegador.'));return}
+ const ch=[];rec=new MediaRecorder(cv.captureStream(30),{mimeType:'video/webm'});
+ rec.ondataavailable=e=>ch.push(e.data);
+ rec.onstop=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(ch,{type:'video/webm'}));a.download='animacao.webm';a.click();rec=null;$('rec').textContent=T('⏺ Gravar WebM')};
+ t=0;recT=0;playing=true;$('play').textContent=T('⏸ Pausar');rec.start();$('rec').textContent=T('⏹ Gravando… (parar)')};
+size();flist();setLang(INIT);requestAnimationFrame(loop);
+</script></body></html>
